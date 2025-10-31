@@ -1,0 +1,70 @@
+stages:
+  - install
+  - build
+  - tests
+
+# ---------------------------------------------
+# Этап установки: скачиваем JUnit
+install_deps:
+  stage: install
+  image: curlimages/curl:latest
+  script:
+    - echo "Downloading JUnit platform..."
+    - curl -L -o junit-platform-console-standalone-1.5.2.jar \
+      https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.5.2/junit-platform-console-standalone-1.5.2.jar
+  artifacts:
+    paths:
+      - junit-platform-console-standalone-1.5.2.jar
+    expire_in: 1 hour
+
+# ---------------------------------------------
+# Этап сборки: компилируем тесты
+build_libs:
+  stage: build
+  image: openjdk:17
+  script:
+    - mkdir -p bin
+    - javac -d bin -sourcepath src -cp .:junit-platform-console-standalone-1.5.2.jar src/SolutionDynamicTest.java
+  artifacts:
+    paths:
+      - bin
+    expire_in: 1 hour
+  dependencies:
+    - install_deps
+
+# ---------------------------------------------
+# Шаблон для запуска тестов на любой версии Java
+.unit_tests:
+  stage: tests
+  image: $JAVA_IMAGE
+  script:
+    - echo "Running tests on Java version:"
+    - java -version
+    - java -jar ./junit-platform-console-standalone-1.5.2.jar \
+        --cp ./bin \
+        -c SolutionDynamicTest \
+        --reports-dir reports
+  dependencies:
+    - install_deps
+    - build_libs
+  artifacts:
+    when: always
+    paths:
+      - reports/
+    expire_in: 1 hour
+
+# Джобы для разных версий Java
+unit_java8:
+  extends: .unit_tests
+  variables:
+    JAVA_IMAGE: "openjdk:8"
+
+unit_java12:
+  extends: .unit_tests
+  variables:
+    JAVA_IMAGE: "openjdk:12"
+
+unit_java15:
+  extends: .unit_tests
+  variables:
+    JAVA_IMAGE: "openjdk:15"
